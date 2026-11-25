@@ -51,13 +51,8 @@ jobs:
 
       - name: Prepare app icons from icon.png
         run: |
-          pip install pillow
-          python3 - <<'PY'
-          from PIL import Image
-          src = Image.open("icon.png").convert("RGB").resize((1024, 1024))
-          src.save("assets/icon-only.png")
-          src.save("assets/icon.png")
-          PY
+          cp icon.png assets/icon-only.png
+          cp icon.png assets/icon.png
 
       - name: Add iOS platform
         run: |

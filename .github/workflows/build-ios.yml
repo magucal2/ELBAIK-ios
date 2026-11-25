@@ -1,0 +1,87 @@
+name: Build ELBAIK iOS (unsigned)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create app project files
+        run: |
+          mkdir -p www assets
+          cat > package.json <<'JSON'
+          {
+            "name": "elbaik-app",
+            "version": "1.0.0",
+            "private": true,
+            "dependencies": {
+              "@capacitor/core": "^6.1.0",
+              "@capacitor/cli": "^6.1.0",
+              "@capacitor/ios": "^6.1.0"
+            }
+          }
+          JSON
+          cat > capacitor.config.json <<'JSON'
+          {
+            "appId": "com.elbaik.hassan",
+            "appName": "البيك حسن",
+            "webDir": "www",
+            "server": {
+              "url": "https://elbeik-site-updated.vercel.app/",
+              "cleartext": false
+            }
+          }
+          JSON
+          cat > www/index.html <<'HTML'
+          <!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#3a1117;color:#fff;font-family:sans-serif;text-align:center;padding-top:40vh">جاري التحميل...<script>location.replace("https://elbeik-site-updated.vercel.app/")</script></body></html>
+          HTML
+
+      - name: Prepare app icons from icon.png
+        run: |
+          pip install pillow
+          python3 - <<'PY'
+          from PIL import Image
+          src = Image.open("icon.png").convert("RGB").resize((1024, 1024))
+          src.save("assets/icon-only.png")
+          src.save("assets/icon.png")
+          PY
+
+      - name: Add iOS platform
+        run: |
+          npm install
+          npx cap add ios
+          npx cap sync ios
+          npm install --no-save @capacitor/assets
+          npx capacitor-assets generate --ios
+
+      - name: Build (no code signing)
+        working-directory: ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+            -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+
+      - name: Package unsigned .ipa
+        run: |
+          mkdir -p Payload
+          cp -r ios/App/build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qr elbaik-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ELBAIK-iOS-unsigned
+          path: elbaik-unsigned.ipa
+          if-no-files-found: error
